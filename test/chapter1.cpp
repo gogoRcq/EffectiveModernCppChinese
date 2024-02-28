@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 #include <glog/logging.h>
 
-TEST(chpter1, test1) {
-    
+TEST(chapter1, base_const) {
 
 }
