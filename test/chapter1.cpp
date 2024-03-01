@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <array>
 #include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <initializer_list>
 #include <sys/signal.h>
 #include <utility>
 
@@ -184,6 +186,116 @@ TEST(chapter1, item1) {
     F1 fff = func1;
 
     F2 ffff = func1;
+}
 
+class A {
+public:
+    // A(int a) {std::cout << "A(int a)" << std::endl;}
+    A(int a, int b) {std::cout << "A(int a, int b)" << std::endl;}
+    A(const A &a) {std::cout << "A(const A &a)" << std::endl;}
+    A(std::initializer_list<int> p) {std::cout << "initial" << std::endl;} // 列表可以结束无限个同类型参数
+};
 
+// 聚合类
+struct peo {
+    int age;
+    double money;
+};
+
+void funcA(A a) {
+
+}
+
+A funcA1() {
+    return A(10, 10);
+}
+
+A funcA2() {
+    return {10, 10};
+}
+
+void funcpp(double p) {
+    // int i(int(p)); // 编译器有两种解析方式，它可能解析为函数声明
+    int i{int(p)}; // 不会解析错误
+}
+
+struct S {
+    int a, b;
+};
+
+TEST(chapter1, item2) {
+    // 区别使用（）和{}创建对象
+    /*
+        也需要关闭自动优化返回值
+        A a(..); 问题:当作为临时变量参数或返回值的时候会进行拷贝
+        A a{...} 的优势就可以避免上面的问题，且不允许缩窄转换
+                      大大减少聚合类的初始化，聚合类：所有成员都是public，
+                                                没有定义任何构造函数
+                                                没有基类和虚函数
+                                          c++17允许有构造函数但必须是公有继承且非虚继承
+                      对解析问题天生免疫， 类内初始化不能用 int a(10);他会解析成函数
+    */  
+    // A a(10, 20); 
+    // A aaa = {10, 20};
+    // A aaaa {10, 20};
+
+    // funcA(A(10, 20)); // 先构造再拷贝，效率低
+    // funcA({10, 20}); // 列表不会存在拷贝
+    // auto p = funcA1(); // 一次构造两次拷贝
+    // auto p = funcA2(); // 一次构造一次拷贝
+
+    // A a{1, 1.2}; // 不允许缩窄类型转换 float -> int
+
+    /*
+        奇怪的array
+    */
+    std::array<int, 3> a1{1, 2, 3};
+    S s1[3] = {{1, 2}, {2, 3}, {3, 4}}; // 聚合类数组
+    S s2[3]{1, 2, 2, 3, 3, 4}; // ok
+
+    // std::array<S, 3> s3{{1, 2}, {2, 3}, {3, 4}}; 编译出错，因为array本身就是聚合类，里面有个数组，需要多包一层
+    std::array<S, 3> s3{{{1, 2}, {2, 3}, {3, 4}}}; //ok
+    
+    /*
+        如何让容器支持列表初始化
+        std::initializer_list<> 以类A为例
+        注意：不允许缩窄函数
+             列表初始化的优先级问题：除非万不得已(参数不同类型且怎么都无法转换)，否则优先匹配列表初始化构造函数
+             A (int ,int ) 和 A(std::initializer_list<int>)无论怎么样都会优先
+             匹配后者，这个很坑，可以通过()调用来避免
+             空的{}不会调用列表初始化，而是无参构造
+
+    */
+    A aaaaa{1, 2};
+}
+
+template<class T> 
+void f(T a) {
+
+}
+
+template<class T> 
+void g(std::initializer_list<T> a){
+}
+
+auto create() {
+    // return {1, 2, 3}; // 模板T无法推导列表初始化结构，报错
+    return 1;
+}
+
+TEST(chapter1, yauto) {
+    /*
+        理解auto类型推导：
+        1、万能引用的第二种写法 auto &&
+        2、{}的auto类型推导
+        3、{}的模板类型推导
+        4、c++14之后auto可以作为函数的返回值，规则却是模板的规则
+    */
+    auto x = 1;
+    auto x1(1);
+    auto x2{1};
+    auto x3 = {1}; // 推导成std::init...
+
+    // f({1, 2, 3}); // 报错， T无法推出列表初始化
+    g({1, 2, 3}); // ok
 }
