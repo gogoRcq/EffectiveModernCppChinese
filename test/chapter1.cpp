@@ -4,7 +4,9 @@
 #include <glog/logging.h>
 #include <initializer_list>
 #include <sys/signal.h>
+#include <type_traits>
 #include <utility>
+#include <vector>
 
 class BigMemoryPool {
 public:
@@ -106,12 +108,11 @@ TEST(chapter1, base_ptr) {
     int (*ptr3)[5] = &array; // ptr3是一个数组指针 int (*) [5] ，指向一个长度为5的int数组，即指向int [5]
     int (&ref)[5] = array; // ref是数组的引用 int (&) [5] 
 
-    
     char str[12] = "hello world";
-    const char *strr = "hello world";
+    const char *strr = "hello world"; // 字符串常量不可修改，不能去掉const
 
     bool (*func1)(int a, int b);
-    bool (&func2)(int a, int b) = fun1; // 函数应用
+    bool (&func2)(int a, int b) = fun1; // 函数引用
     func1 = fun1; // 这里省略了&取值符号，发生了退化函数名退化为函数指针
     bool res = func1(1, 2); // 这里没有用 （*func1）也能成功
 
@@ -193,7 +194,7 @@ public:
     // A(int a) {std::cout << "A(int a)" << std::endl;}
     A(int a, int b) {std::cout << "A(int a, int b)" << std::endl;}
     A(const A &a) {std::cout << "A(const A &a)" << std::endl;}
-    A(std::initializer_list<int> p) {std::cout << "initial" << std::endl;} // 列表可以结束无限个同类型参数
+    A(std::initializer_list<int> p) {std::cout << "initial" << std::endl;} // 列表可以接受无限个同类型参数
 };
 
 // 聚合类
@@ -203,7 +204,6 @@ struct peo {
 };
 
 void funcA(A a) {
-
 }
 
 A funcA1() {
@@ -298,4 +298,116 @@ TEST(chapter1, yauto) {
 
     // f({1, 2, 3}); // 报错， T无法推出列表初始化
     g({1, 2, 3}); // ok
+}
+
+struct uutest1 {static int testtype;};
+struct uutest2 {typedef int testtype;};
+
+template<class T>
+using myvc1 = std::vector<T>;
+
+template<class T>
+// typedef定义模板的别名
+// typedef myvc2 std::vector<T>; // 错误
+struct myvc2{
+    typedef std::vector<T> type ;
+};
+
+template<class T>
+class weight1 {
+public:
+    myvc1<T> p; // 若用using不需要加上typename ！！！
+    typename myvc2<T>::type p2; // 若用typedef必须要加上typename
+};
+
+template<class T>
+class myclass {
+public:
+    void foo() {
+        typename T::testtype *ptr; // 消除T::testtype为类型而不是uutest1中的变量
+    }
+};
+
+TEST(chapter1, uusing) {
+    /*
+        优先考虑别名声明而非typedef
+        using > typedef
+        1、typename在模板类中用来澄清下一个标识符代表的是某类型，比较明显的就是作用域符号
+            c++中T::xxx默认认为是作用域访问符号
+        2、typedef定义模板的别名很麻烦必须要声明类
+        3、using再模板类中不需要typename来澄清
+        4、类型萃取器，用于添加/删除模板T的修饰
+            typename std::remove_const<T>::type c++11  const T -> T // 这个需要typename
+            std::remove_const_t<T>   c++14 const T -> T // C++14用using实现了，不需要typename
+    */
+    myclass<uutest1> mc1;
+    //mc1.foo(); // 报错
+    myclass<uutest2> mc2;
+    mc2.foo();
+
+    weight1<int> vec{{1, 2, 3}, {}};
+}
+
+template<class T> 
+T &&mymove1(T &&param) {
+    return static_cast<T &&>(param);
+}
+
+template<class T> 
+std::remove_reference_t<T> && mymove2(T &&param) {
+    // 做类型萃取，因为万能引用弄进来的是引用类型，不去掉后面会产生折叠
+    using returntype = std::remove_reference_t<T> &&;
+    return static_cast<returntype>(param);
+}
+
+void process(const int& a) {
+    std::cout << "process la\n";
+}
+
+void process(int &&a) {
+    std::cout << "process ra\n";
+}
+
+template<class T>
+void logAndprocess(T &&param) {
+    process(std::forward<T>(param)); // param本身永远是左值， 用forward能保留原变量的类型（左值还是右值）
+}
+
+TEST(chapter1, udforward) {
+    /*
+        理解std::move和std::forward
+        1、std::move的实现（必须模板）
+            可以接入任意类型所以参数是T &&万能引用
+            本质是类型转换 static_cast<type &&>(...);
+        2、std::move本质是将实参转化为右值
+            就是告诉编译器这个对象很适合移动，但是你可以不移动，移动的操作是你手动做的事
+        3、对一个const类型的对象做move结果为const T &&， const &可以匹配任何类型，此时可能
+            仍然调用拷贝构造函数，如果输入值的类型是const T
+    */
+    int a = 10;
+    // int &&p = mymove1(a); // 出大问题，因为全部引用折叠成左值引用了，返回的也是左值引用
+    int &&p = mymove2(a);
+    mymove1(10); // ok 
+
+    /*
+        初探std::forward 本质：有条件的move，只有实参用右值初始化才能转为右值 
+        模板类型参数本身就是左值，如果没有forward，传进来的变量的左值和右值信息已经丢失
+    */
+    logAndprocess(std::move(a));
+}
+
+TEST(chapter1, uddecltype) { 
+    /*
+        decltype + 变量 所有的信息都会被保留，数组和函数也不会退化
+        decltype + 表达式 会返回表达式结果对应的类型
+            不是左值就是右值，左值：得到该类型的左值引用，右值：得到该类型
+        想将变量作为表达式可以加括号（括号表达式包含一个变量产生的结果总是一个左值）
+    */
+
+    const int &&a = 10;
+    decltype(a) b = 10;
+
+    int c = 10;
+    int *cptr = &c;
+    decltype( *cptr) por = c; //因为*cptr是一个表达式，所以por推导出来的类型是int &
 }
