@@ -149,6 +149,7 @@ TEST(chapter1, item1) {
     int (* const funcptr2)(int) = func; // 顶层const ok
     // const int (* funcptr3)(int) = func; // 非别名无法用底层const
     const F *f = func; // 别名可用底层const但没什么用
+    
 
     /*
         模板类型 T 可以情况讨论：
