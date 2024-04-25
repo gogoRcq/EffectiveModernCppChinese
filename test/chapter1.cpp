@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cstdio>
 #include <gtest/gtest.h>
 #include <glog/logging.h>
 #include <initializer_list>
